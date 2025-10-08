@@ -2,7 +2,7 @@
   "name": "api-supabase",
   "version": "1.0.0",
   "description": "API Node.js com Supabase, Express, CORS e bcrypt",
-  "main": "api_node.js",
+  "main": "API_node.js",
   "scripts": {
     "start": "node api_node.js"
   },

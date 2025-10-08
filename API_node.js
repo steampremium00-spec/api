@@ -1,35 +1,97 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const bcrypt = require('bcrypt');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 app.use(express.json());
 
-// ✅ CORS configurado para Render e Framer
 app.use(cors({
   origin: [
     'https://framer.com', 
     'https://signalsafe.com.br',
-    /\.framer\.app$/,  // Permite qualquer subdomínio framer.app
-    /\.framer\.website$/,  // Permite preview do Framer
+    /\.framer\.app$/,
+    /\.framer\.website$/,
     'http://localhost:3000'
   ],
   credentials: true,
 }));
 
-// ✅ Conexão Supabase
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
-// ✅ Função auxiliar
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+// ========================================
+// 🔹 MIDDLEWARE DE AUTENTICAÇÃO
+// ========================================
+
+const verificarAutenticacao = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader) {
+      return res.status(401).json({ error: 'Token não fornecido.' });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+
+    const { data, error } = await supabase.auth.getUser(token);
+    
+    if (error || !data.user) {
+      return res.status(401).json({ error: 'Token inválido ou sessão expirada.' });
+    }
+
+    req.user = data.user;
+    next();
+  } catch (error) {
+    console.error('Erro no middleware de autenticação:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
+  }
+};
+
+const verificarAdmin = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader) {
+      return res.status(401).json({ error: 'Token não fornecido.' });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+
+    const { data, error } = await supabase.auth.getUser(token);
+    
+    if (error || !data.user) {
+      return res.status(401).json({ error: 'Token inválido.' });
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('is_admin')
+      .eq('id', data.user.id)
+      .single();
+
+    if (userError) {
+      console.error('Erro ao buscar dados do usuário:', userError);
+      return res.status(500).json({ error: 'Erro ao verificar permissões.' });
+    }
+
+    if (!userData || !userData.is_admin) {
+      return res.status(403).json({ error: 'Acesso negado. Apenas administradores.' });
+    }
+
+    req.user = data.user;
+    next();
+  } catch (error) {
+    console.error('Erro no middleware admin:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
+  }
+};
 
 // ========================================
 // 🔹 ROTAS DE AUTENTICAÇÃO
 // ========================================
 
-// 🟢 Cadastro
 app.post('/signup', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -76,7 +138,6 @@ app.post('/signup', async (req, res) => {
   }
 });
 
-// 🟢 Login
 app.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -104,7 +165,6 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// 🟢 Esqueci minha senha
 app.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -126,7 +186,6 @@ app.post('/forgot-password', async (req, res) => {
   }
 });
 
-// 🟢 Redefinir senha
 app.post('/reset-password', async (req, res) => {
   try {
     const { access_token, new_password } = req.body;
@@ -148,18 +207,9 @@ app.post('/reset-password', async (req, res) => {
   }
 });
 
-// 🟢 Verificação de sessão
-app.get('/verify-session', async (req, res) => {
+app.get('/verify-session', verificarAutenticacao, async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token)
-      return res.status(401).json({ error: 'Token não fornecido.' });
-
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (error || !user)
-      return res.status(401).json({ error: 'Sessão inválida.' });
-
-    return res.status(200).json({ user });
+    return res.status(200).json({ user: req.user });
   } catch (error) {
     console.error('Erro no verify-session:', error);
     return res.status(500).json({ error: 'Erro interno do servidor.' });
@@ -170,82 +220,66 @@ app.get('/verify-session', async (req, res) => {
 // 🔹 ROTAS DE USUÁRIO (ESTABELECIMENTOS E JAMMERS)
 // ========================================
 
-// 🟢 Buscar estabelecimentos do usuário
-app.get('/user/:userId/estabelecimentos', async (req, res) => {
+app.get('/user/:userId/estabelecimentos', verificarAutenticacao, async (req, res) => {
   try {
     const { userId } = req.params;
 
-    // Verificar autenticação
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ error: 'Token não fornecido.' });
-    }
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      return res.status(401).json({ error: 'Token inválido.' });
-    }
-
-    // Verificar se está buscando os próprios dados
-    if (user.id !== userId) {
+    if (req.user.id !== userId) {
       return res.status(403).json({ error: 'Você não tem permissão para acessar estes dados.' });
     }
 
-    const { data, error } = await supabase
+    const { data: estabelecimentos, error } = await supabase
       .from('estabelecimento')
       .select('*')
       .eq('user_id', userId)
       .order('nome', { ascending: true });
 
-    if (error) return res.status(500).json({ error: 'Erro ao buscar estabelecimentos.' });
-    return res.status(200).json({ estabelecimentos: data || [], total: data?.length || 0 });
+    if (error) {
+      console.error('Erro ao buscar estabelecimentos:', error);
+      return res.status(500).json({ error: 'Erro ao buscar estabelecimentos.' });
+    }
+
+    return res.status(200).json({ 
+      estabelecimentos: estabelecimentos || [], 
+      total: estabelecimentos?.length || 0 
+    });
   } catch (error) {
     console.error('Erro ao buscar estabelecimentos:', error);
     return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 
-// 🟢 Buscar estabelecimentos completos (com jammers)
-app.get('/user/:userId/estabelecimentos-completo', async (req, res) => {
+app.get('/user/:userId/estabelecimentos-completo', verificarAutenticacao, async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const { data: estabelecimentos, error: estabError } = await supabase
+    if (req.user.id !== userId) {
+      return res.status(403).json({ error: 'Você não tem permissão para acessar estes dados.' });
+    }
+
+    const { data: estabelecimentos, error } = await supabase
       .from('estabelecimento')
-      .select('*')
+      .select(`
+        *,
+        jammers (*)
+      `)
       .eq('user_id', userId)
       .order('nome', { ascending: true });
 
-    if (estabError) {
-      console.error('Erro ao buscar estabelecimentos:', estabError);
-      return res.status(500).json({ error: 'Erro ao buscar estabelecimentos.' });
+    if (error) {
+      console.error('Erro ao buscar dados completos:', error);
+      return res.status(500).json({ error: 'Erro ao buscar dados completos.' });
     }
 
-    const estabelecimentosComJammers = await Promise.all(
-      (estabelecimentos || []).map(async (estab) => {
-        const { data: jammers, error: jammersError } = await supabase
-          .from('jammers')
-          .select('*')
-          .eq('id_estabelecimento', estab.id)
-          .order('id', { ascending: true });
-
-        if (jammersError) {
-          console.error(`Erro ao buscar jammers do estabelecimento ${estab.id}:`, jammersError);
-          return { ...estab, jammers: [], total_jammers: 0 };
-        }
-
-        return {
-          ...estab,
-          jammers: jammers || [],
-          total_jammers: jammers?.length || 0
-        };
-      })
-    );
+    const estabelecimentosComTotais = (estabelecimentos || []).map(estab => ({
+      ...estab,
+      total_jammers: estab.jammers?.length || 0
+    }));
 
     return res.status(200).json({ 
-      estabelecimentos: estabelecimentosComJammers,
-      total_estabelecimentos: estabelecimentosComJammers.length,
-      total_jammers: estabelecimentosComJammers.reduce((acc, e) => acc + e.total_jammers, 0)
+      estabelecimentos: estabelecimentosComTotais,
+      total_estabelecimentos: estabelecimentosComTotais.length,
+      total_jammers: estabelecimentosComTotais.reduce((acc, e) => acc + e.total_jammers, 0)
     });
   } catch (error) {
     console.error('Erro ao buscar dados completos:', error);
@@ -253,10 +287,24 @@ app.get('/user/:userId/estabelecimentos-completo', async (req, res) => {
   }
 });
 
-// 🟢 Buscar jammers de um estabelecimento
-app.get('/estabelecimento/:estabelecimentoId/jammers', async (req, res) => {
+app.get('/estabelecimento/:estabelecimentoId/jammers', verificarAutenticacao, async (req, res) => {
   try {
     const { estabelecimentoId } = req.params;
+
+    const { data: estabelecimento, error: estabError } = await supabase
+      .from('estabelecimento')
+      .select('user_id')
+      .eq('id', estabelecimentoId)
+      .single();
+
+    if (estabError || !estabelecimento) {
+      return res.status(404).json({ error: 'Estabelecimento não encontrado.' });
+    }
+
+    if (estabelecimento.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Você não tem permissão para acessar estes dados.' });
+    }
+
     const { data, error } = await supabase
       .from('jammers')
       .select('*')
@@ -271,8 +319,7 @@ app.get('/estabelecimento/:estabelecimentoId/jammers', async (req, res) => {
   }
 });
 
-// 🟢 Atualizar estado do jammer (ligar/desligar)
-app.patch('/jammer/:jammerId', async (req, res) => {
+app.patch('/jammer/:jammerId', verificarAutenticacao, async (req, res) => {
   try {
     const { jammerId } = req.params;
     const { estado_jammer } = req.body;
@@ -281,18 +328,6 @@ app.patch('/jammer/:jammerId', async (req, res) => {
       return res.status(400).json({ error: 'estado_jammer é obrigatório.' });
     }
 
-    // Verificar se o usuário é dono do jammer
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ error: 'Token não fornecido.' });
-    }
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      return res.status(401).json({ error: 'Token inválido.' });
-    }
-
-    // Verificar se o jammer pertence ao usuário
     const { data: jammerData, error: jammerError } = await supabase
       .from('jammers')
       .select(`
@@ -305,15 +340,15 @@ app.patch('/jammer/:jammerId', async (req, res) => {
       .single();
 
     if (jammerError || !jammerData) {
+      console.error('Erro ao buscar jammer:', jammerError);
       return res.status(404).json({ error: 'Jammer não encontrado.' });
     }
 
-    if (jammerData.estabelecimento.user_id !== user.id) {
+    if (jammerData.estabelecimento.user_id !== req.user.id) {
       return res.status(403).json({ error: 'Você não tem permissão para alterar este jammer.' });
     }
 
-    // Atualizar o jammer
-    const { data, error } = await supabase
+    const { data: updatedJammer, error } = await supabase
       .from('jammers')
       .update({ estado_jammer })
       .eq('id', jammerId)
@@ -327,7 +362,7 @@ app.patch('/jammer/:jammerId', async (req, res) => {
 
     return res.status(200).json({ 
       message: 'Jammer atualizado com sucesso.',
-      jammer: data
+      jammer: updatedJammer
     });
   } catch (error) {
     console.error('Erro interno ao atualizar jammer:', error);
@@ -336,39 +371,9 @@ app.patch('/jammer/:jammerId', async (req, res) => {
 });
 
 // ========================================
-// 🔹 MIDDLEWARE DE ADMIN
-// ========================================
-
-const verificarAdmin = async (req, res, next) => {
-  try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) return res.status(401).json({ error: 'Token não fornecido.' });
-
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (error || !user) return res.status(401).json({ error: 'Token inválido.' });
-
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single();
-
-    if (userError || !userData?.is_admin)
-      return res.status(403).json({ error: 'Acesso negado. Apenas administradores.' });
-
-    req.user = user;
-    next();
-  } catch (error) {
-    console.error('Erro ao verificar admin:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
-  }
-};
-
-// ========================================
 // 🔹 ROTAS DE ADMIN
 // ========================================
 
-// 🟢 Listar todos os usuários
 app.get('/admin/usuarios', verificarAdmin, async (req, res) => {
   try {
     const { data: usuarios, error } = await supabase
@@ -391,7 +396,6 @@ app.get('/admin/usuarios', verificarAdmin, async (req, res) => {
   }
 });
 
-// 🟢 Criar estabelecimento (admin)
 app.post('/admin/estabelecimento', verificarAdmin, async (req, res) => {
   try {
     const { user_id, nome, cep } = req.body;
@@ -428,7 +432,6 @@ app.post('/admin/estabelecimento', verificarAdmin, async (req, res) => {
   }
 });
 
-// 🟢 Criar jammer (admin)
 app.post('/admin/jammer', verificarAdmin, async (req, res) => {
   try {
     const { id_estabelecimento, estado_jammer } = req.body;
@@ -479,7 +482,6 @@ app.post('/admin/jammer', verificarAdmin, async (req, res) => {
   }
 });
 
-// 🟢 Listar todos os estabelecimentos (admin)
 app.get('/admin/estabelecimentos', verificarAdmin, async (req, res) => {
   try {
     const { data: estabelecimentos, error } = await supabase
@@ -508,7 +510,6 @@ app.get('/admin/estabelecimentos', verificarAdmin, async (req, res) => {
   }
 });
 
-// 🟢 Listar todos os jammers (admin)
 app.get('/admin/jammers', verificarAdmin, async (req, res) => {
   try {
     const { data: jammers, error } = await supabase
@@ -543,18 +544,15 @@ app.get('/admin/jammers', verificarAdmin, async (req, res) => {
   }
 });
 
-// 🟢 Deletar estabelecimento (admin)
 app.delete('/admin/estabelecimento/:id', verificarAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Deletar jammers primeiro
     await supabase
       .from('jammers')
       .delete()
       .eq('id_estabelecimento', id);
 
-    // Deletar estabelecimento
     const { data, error } = await supabase
       .from('estabelecimento')
       .delete()
@@ -577,7 +575,6 @@ app.delete('/admin/estabelecimento/:id', verificarAdmin, async (req, res) => {
   }
 });
 
-// 🟢 Deletar jammer (admin)
 app.delete('/admin/jammer/:id', verificarAdmin, async (req, res) => {
   try {
     const { id } = req.params;

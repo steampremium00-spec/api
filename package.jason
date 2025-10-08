@@ -1,0 +1,18 @@
+{
+  "name": "api-supabase",
+  "version": "1.0.0",
+  "description": "API Node.js com Supabase, Express, CORS e bcrypt",
+  "main": "api_node.js",
+  "scripts": {
+    "start": "node api_node.js"
+  },
+  "author": "Levi Cartaginezzi",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.29.0",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.3.1"
+  }
+}

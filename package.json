@@ -4,7 +4,7 @@
   "description": "API Node.js com Supabase, Express, CORS e bcrypt",
   "main": "server.js",
   "scripts": {
-    "start": "node api_node.js"
+    "start": "node server.js"
   },
   "author": "Levi Cartaginezzi",
   "license": "MIT",

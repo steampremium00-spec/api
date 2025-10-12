@@ -6,20 +6,20 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 app.use(express.json());
 
-// ✅ CORS CORRETO
+// ✅ CORS CORRETO - REVISADO
 app.use(cors({
   origin: [
-    'https://framer.com/',
-    'https://signalsafe.com.br/',
-    'https://www.signalsafe.com.br/',
-    /.framer.app$/,
-    /.framer.website$/,
-    /.framer.site$/,
-    /.framercanvas.com$/,
-    /.framer.design$/,
-    /.framerusercontent.com$/,
-    'http://localhost:3000/',
-    '' // TEMPORÁRIO PARA TESTES - Remova depois!
+    'https://framer.com',
+    'https://signalsafe.com.br',
+    'https://www.signalsafe.com.br',
+    /\.framer\.app$/,
+    /\.framer\.website$/,
+    /\.framer\.site$/,
+    /\.framercanvas\.com$/,
+    /\.framer\.design$/,
+    /\.framerusercontent\.com$/,
+    'http://localhost:3000',
+    '*' // TEMPORÁRIO PARA TESTES - Remova em produção!
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -28,8 +28,8 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
-// Adicione isso logo após o CORS
-app.options('', cors());
+// Handler para requisições OPTIONS
+app.options('*', cors());
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
@@ -110,6 +110,8 @@ app.post('/signup', async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log('📥 Requisição de cadastro recebida:', { email });
+
     if (!email || !password)
       return res.status(400).json({ error: 'E-mail e senha são obrigatórios.' });
     if (!validateEmail(email))
@@ -142,9 +144,12 @@ app.post('/signup', async (req, res) => {
       .from('users')
       .insert([{ id: userId, email, user_name: email, is_admin: false }]);
 
-    if (insertError)
+    if (insertError) {
+      console.error('Erro ao inserir na tabela users:', insertError);
       return res.status(400).json({ error: insertError.message });
+    }
 
+    console.log('✅ Usuário cadastrado com sucesso:', userId);
     return res.status(201).json({ message: 'Usuário cadastrado com sucesso.', userId });
   } catch (error) {
     console.error('Erro no signup:', error);
@@ -155,18 +160,25 @@ app.post('/signup', async (req, res) => {
 app.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    
+    console.log('📥 Tentativa de login:', { email });
+
     if (!email || !password)
       return res.status(400).json({ error: 'E-mail e senha são obrigatórios.' });
 
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    if (signInError)
+    if (signInError) {
+      console.error('Erro no login:', signInError);
       return res.status(400).json({ error: 'E-mail ou senha incorretos.' });
+    }
 
     const { data: userData } = await supabase
       .from('users')
       .select('user_name, is_admin')
       .eq('id', signInData.user.id)
       .single();
+
+    console.log('✅ Login realizado:', signInData.user.email);
 
     return res.status(200).json({
       message: 'Login realizado com sucesso.',
@@ -627,4 +639,3 @@ app.get('/health', (req, res) => {
 // ========================================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
-

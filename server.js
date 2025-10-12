@@ -9,19 +9,27 @@ app.use(express.json());
 // ✅ CORS CORRETO
 app.use(cors({
   origin: [
-    'https://framer.com',
-    'https://signalsafe.com.br',
-    'https://www.signalsafe.com.br',
-    /\.framer\.app$/,
-    /\.framer\.website$/,
-    /\.framer\.site$/,
-    /\.framercanvas\.com$/,
-    'http://localhost:3000'
+    'https://framer.com/',
+    'https://signalsafe.com.br/',
+    'https://www.signalsafe.com.br/',
+    /.framer.app$/,
+    /.framer.website$/,
+    /.framer.site$/,
+    /.framercanvas.com$/,
+    /.framer.design$/,
+    /.framerusercontent.com$/,
+    'http://localhost:3000/',
+    '' // TEMPORÁRIO PARA TESTES - Remova depois!
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
+
+// Adicione isso logo após o CORS
+app.options('', cors());
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
@@ -619,3 +627,4 @@ app.get('/health', (req, res) => {
 // ========================================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
+

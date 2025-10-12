@@ -6,15 +6,21 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 app.use(express.json());
 
+// ✅ CORS CORRETO
 app.use(cors({
   origin: [
-    'https://framer.com', 
+    'https://framer.com',
     'https://signalsafe.com.br',
+    'https://www.signalsafe.com.br',
     /\.framer\.app$/,
     /\.framer\.website$/,
+    /\.framer\.site$/,
+    /\.framercanvas\.com$/,
     'http://localhost:3000'
   ],
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 }));
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);

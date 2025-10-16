@@ -7,7 +7,6 @@ const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 app.use(express.json());
-
 // ✅ CONFIGURAÇÃO DE CORS REVISADA PARA PRODUÇÃO
 app.use(cors({
   origin: [
@@ -21,7 +20,11 @@ app.use(cors({
     /\.framer\.design$/,
     /\.framerusercontent\.com$/,
     'http://localhost:3000',
-    // 🚨 REMOVA A LINHA ABAIXO EM PRODUÇÃO!
+    
+    // 💡 URL DE VISUALIZAÇÃO DO SEU PROJETO ADICIONADA:
+    'https://project-s1qplmoesp0n6zi7xu0c.framercanvas.com',
+
+    // 🚨 REMOVA A LINHA ABAIXO EM PRODUÇÃO! (Se ainda estiver lá, tire)
     // '*' 
   ],
   credentials: true,
@@ -460,3 +463,4 @@ app.get('/health', (req, res) => {
 // ========================================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
+

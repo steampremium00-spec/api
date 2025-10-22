@@ -174,7 +174,7 @@ app.post('/forgot-password', async (req, res) => {
     if (!validateEmail(email)) return res.status(400).json({ error: 'E-mail inválido.' });
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://signalsafe.com.br/reset-password', // 🔹 BOA PRÁTICA: Mover para variável de ambiente
+      redirectTo: 'https://signalsafe.com.br/confirma-senha', // ✅ ÚNICA MUDANÇA AQUI!
     });
 
     if (error) {
@@ -463,4 +463,3 @@ app.get('/health', (req, res) => {
 // ========================================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
-
